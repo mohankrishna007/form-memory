@@ -1,8 +1,10 @@
 (() => {
   const STORAGE_KEY = "formMemoryAssistantData";
+  const SETTINGS_KEY = "formMemoryAssistantSettings";
   const statsEl = document.getElementById("stats");
   const statusEl = document.getElementById("status");
   const clearBtn = document.getElementById("clearAllBtn");
+  const enabledToggle = document.getElementById("enabledToggle");
 
   function storageGet() {
     return new Promise((resolve) => {
@@ -15,6 +17,23 @@
   function storageRemove() {
     return new Promise((resolve) => {
       chrome.storage.local.remove(STORAGE_KEY, resolve);
+    });
+  }
+
+  function settingsGet() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([SETTINGS_KEY], (result) => {
+        const settings = result[SETTINGS_KEY] || {};
+        resolve({
+          enabled: settings.enabled !== false
+        });
+      });
+    });
+  }
+
+  function settingsSet(settings) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [SETTINGS_KEY]: settings }, resolve);
     });
   }
 
@@ -46,5 +65,14 @@
     await refreshStats();
   });
 
-  refreshStats();
+  enabledToggle.addEventListener("change", async () => {
+    await settingsSet({ enabled: enabledToggle.checked });
+    setStatus(enabledToggle.checked ? "Assistant is enabled." : "Assistant is paused.");
+  });
+
+  (async () => {
+    const settings = await settingsGet();
+    enabledToggle.checked = settings.enabled;
+    await refreshStats();
+  })();
 })();

@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Form Memory Assistant",
-  "version": "1.0.0",
-  "description": "Remember form values and suggest them on similar fields.",
+  "version": "1.1.0",
+  "description": "Smartly remembers form values and suggests them in similar fields.",
   "permissions": ["storage", "activeTab", "scripting"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -13,6 +19,10 @@
   ],
   "action": {
     "default_title": "Form Memory Assistant",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   }
 }

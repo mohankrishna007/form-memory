@@ -1,14 +1,22 @@
 (() => {
   const STORAGE_KEY = "formMemoryAssistantData";
+  const SETTINGS_KEY = "formMemoryAssistantSettings";
   const MAX_VALUES_PER_FIELD = 5;
   const DROPDOWN_ID = "fma-suggestions";
-  const TARGET_SELECTOR = [
-    "input[type='text']",
-    "input[type='email']",
-    "input[type='tel']",
-    "input:not([type])",
-    "textarea"
-  ].join(",");
+  const TARGET_SELECTOR = "input, textarea";
+  const SUPPORTED_INPUT_TYPES = new Set(["", "text", "email", "tel", "search", "url", "number"]);
+  const FIELD_INTENT_RULES = [
+    { intent: "job_skill", pattern: /\b(skill|skills|technology|tech stack|competenc|framework|tool)\b/i },
+    { intent: "education_college", pattern: /\b(college|university|institute|school)\b/i },
+    { intent: "education_branch", pattern: /\b(branch|major|specialization|discipline|stream|department)\b/i },
+    { intent: "education_degree", pattern: /\b(degree|qualification|education|course)\b/i },
+    { intent: "job_title", pattern: /\b(job title|title|role|position|designation)\b/i },
+    { intent: "company", pattern: /\b(company|employer|organization|organisation|workplace)\b/i },
+    { intent: "experience", pattern: /\b(experience|years of experience|work experience)\b/i },
+    { intent: "location", pattern: /\b(location|city|state|country|address)\b/i },
+    { intent: "linkedin", pattern: /\b(linkedin)\b/i },
+    { intent: "portfolio", pattern: /\b(portfolio|github|website|personal site|url)\b/i }
+  ];
 
   const SENSITIVE_PATTERNS = [
     /password/i,
@@ -28,6 +36,7 @@
 
   let activeField = null;
   let dropdown = null;
+  let extensionEnabled = true;
 
   function normalizeLabel(value) {
     return (value || "")
@@ -41,6 +50,30 @@
     return (value || "").trim();
   }
 
+  function tokenize(value) {
+    return normalizeLabel(value)
+      .split(" ")
+      .filter(Boolean);
+  }
+
+  function tokenOverlapScore(a, b) {
+    const aTokens = tokenize(a);
+    const bTokens = tokenize(b);
+    if (!aTokens.length || !bTokens.length) {
+      return 0;
+    }
+
+    const bSet = new Set(bTokens);
+    let overlap = 0;
+    aTokens.forEach((token) => {
+      if (bSet.has(token)) {
+        overlap += 1;
+      }
+    });
+
+    return overlap / Math.max(aTokens.length, bTokens.length);
+  }
+
   function storageGet() {
     return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY], (result) => {
@@ -52,6 +85,17 @@
   function storageSet(data) {
     return new Promise((resolve) => {
       chrome.storage.local.set({ [STORAGE_KEY]: data }, resolve);
+    });
+  }
+
+  function settingsGet() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([SETTINGS_KEY], (result) => {
+        const settings = result[SETTINGS_KEY] || {};
+        resolve({
+          enabled: settings.enabled !== false
+        });
+      });
     });
   }
 
@@ -83,6 +127,47 @@
       field.id ||
       ""
     ).trim();
+  }
+
+  function getAriaLabelledByText(field) {
+    const ids = (field.getAttribute("aria-labelledby") || "")
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (!ids.length) {
+      return "";
+    }
+
+    return ids
+      .map((id) => {
+        const node = document.getElementById(id);
+        return node?.textContent?.trim() || "";
+      })
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function collectFieldDescriptor(field, labelText) {
+    const descriptorParts = [
+      labelText,
+      getAriaLabelledByText(field),
+      field.getAttribute("aria-label"),
+      field.getAttribute("autocomplete"),
+      field.getAttribute("data-automation-id"),
+      field.getAttribute("data-automation-label"),
+      field.getAttribute("data-uxi-element-id"),
+      field.name,
+      field.id,
+      field.placeholder
+    ].filter(Boolean);
+
+    return normalizeLabel(descriptorParts.join(" "));
+  }
+
+  function inferFieldIntents(descriptor) {
+    return FIELD_INTENT_RULES
+      .filter((rule) => rule.pattern.test(descriptor))
+      .map((rule) => rule.intent);
   }
 
   function isVisibleField(field) {
@@ -123,8 +208,14 @@
       return false;
     }
 
-    if (!field.matches(TARGET_SELECTOR)) {
-      return false;
+    if (field instanceof HTMLInputElement) {
+      const type = (field.type || "").toLowerCase();
+      const isComboInput =
+        field.getAttribute("role") === "combobox" || field.hasAttribute("aria-autocomplete");
+
+      if (!isComboInput && !SUPPORTED_INPUT_TYPES.has(type)) {
+        return false;
+      }
     }
 
     if (field.disabled || field.readOnly) {
@@ -136,21 +227,68 @@
 
   function getFieldMeta(field) {
     const label = getFieldLabel(field);
-    const normalized = normalizeLabel(label);
+    const fallbackKey = normalizeLabel(field.name || field.id || field.placeholder || "");
+    const normalized = normalizeLabel(label) || fallbackKey;
+    const descriptor = collectFieldDescriptor(field, label);
+    const intents = inferFieldIntents(descriptor);
     return {
       label: label || "Field",
-      key: normalized
+      key: normalized,
+      descriptor,
+      intents
     };
   }
 
-  function labelsMatch(a, b) {
-    if (!a || !b) {
-      return false;
+  function getSimilarityScore(currentMeta, savedKey, entry) {
+    if (!currentMeta.key) {
+      return 0;
     }
-    return a.includes(b) || b.includes(a);
+
+    const savedLabel = normalizeLabel(entry.label || "");
+    const savedDescriptor = normalizeLabel(entry.descriptor || savedLabel || savedKey);
+
+    const partialMatch =
+      currentMeta.key.includes(savedKey) ||
+      savedKey.includes(currentMeta.key) ||
+      currentMeta.descriptor.includes(savedDescriptor) ||
+      savedDescriptor.includes(currentMeta.descriptor);
+
+    const keyScore = tokenOverlapScore(currentMeta.key, savedKey);
+    const labelScore = tokenOverlapScore(currentMeta.key, savedLabel);
+    const descriptorScore = tokenOverlapScore(currentMeta.descriptor, savedDescriptor);
+
+    const currentIntents = new Set(currentMeta.intents);
+    const savedIntents = new Set(Array.isArray(entry.intents) ? entry.intents : []);
+    const hasIntentMatch = [...currentIntents].some((intent) => savedIntents.has(intent));
+
+    let score = Math.max(keyScore, labelScore, descriptorScore);
+    if (partialMatch) {
+      score += 0.25;
+    }
+    if (hasIntentMatch) {
+      score += 0.35;
+    }
+
+    return score;
+  }
+
+  function isValueCompatible(field, value) {
+    if (!(field instanceof HTMLInputElement)) {
+      return true;
+    }
+
+    if ((field.type || "").toLowerCase() === "number") {
+      return /^-?\d+(\.\d+)?$/.test(value);
+    }
+
+    return true;
   }
 
   async function rememberValue(field) {
+    if (!extensionEnabled) {
+      return;
+    }
+
     if (!isSupportedField(field)) {
       return;
     }
@@ -179,6 +317,8 @@
     const updatedValues = [value, ...existing].slice(0, MAX_VALUES_PER_FIELD);
     data[meta.key] = {
       label: meta.label,
+      descriptor: meta.descriptor,
+      intents: meta.intents,
       values: updatedValues
     };
 
@@ -262,9 +402,8 @@
         return;
       }
 
-      const savedLabel = normalizeLabel(entry.label || "");
-      const similar = labelsMatch(meta.key, savedKey) || labelsMatch(meta.key, savedLabel);
-      if (!similar) {
+      const score = getSimilarityScore(meta, savedKey, entry);
+      if (score < 0.25) {
         return;
       }
 
@@ -273,16 +412,20 @@
         if (seenValues.has(normalized)) {
           return;
         }
+        if (!isValueCompatible(field, value)) {
+          return;
+        }
         seenValues.add(normalized);
         suggestions.push({
           key: savedKey,
           label: entry.label || "Saved",
+          score,
           value
         });
       });
     });
 
-    return suggestions.slice(0, 8);
+    return suggestions.sort((a, b) => b.score - a.score).slice(0, 8);
   }
 
   function renderSuggestions(items, field) {
@@ -362,6 +505,11 @@
   }
 
   async function showSuggestions(field) {
+    if (!extensionEnabled) {
+      hideDropdown();
+      return;
+    }
+
     if (!isSupportedField(field)) {
       hideDropdown();
       return;
@@ -382,6 +530,10 @@
   const inputDebounceTimers = new WeakMap();
 
   function queueRemember(field) {
+    if (!extensionEnabled) {
+      return;
+    }
+
     const previous = inputDebounceTimers.get(field);
     if (previous) {
       clearTimeout(previous);
@@ -494,5 +646,21 @@
     if (dropdown && dropdown.style.display !== "none" && activeField) {
       positionDropdown(activeField);
     }
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[SETTINGS_KEY]) {
+      return;
+    }
+
+    const next = changes[SETTINGS_KEY].newValue || {};
+    extensionEnabled = next.enabled !== false;
+    if (!extensionEnabled) {
+      hideDropdown();
+    }
+  });
+
+  settingsGet().then((settings) => {
+    extensionEnabled = settings.enabled;
   });
 })();

@@ -59,6 +59,38 @@
         color: var(--text);
       }
 
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #f8fafc;
+      }
+
+      .toggle-row label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .toggle-row input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+        cursor: pointer;
+      }
+
+      .tips {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
       button {
         width: 100%;
         border: none;
@@ -90,10 +122,16 @@
       <h1>Form Memory Assistant</h1>
       <p>Stores common form values and suggests them on similar fields.</p>
 
+      <div class="toggle-row">
+        <label for="enabledToggle">Enable on this browser</label>
+        <input type="checkbox" id="enabledToggle" checked />
+      </div>
+
       <div class="stats" id="stats">Loading...</div>
 
       <button class="clear" id="clearAllBtn">Clear All Saved Values</button>
       <div class="status" id="status"></div>
+      <div class="tips">Tip: Focus a similar field to see suggestions. Use the × button in the dropdown to remove a single suggestion.</div>
     </div>
 
     <script src="popup.js"></script>

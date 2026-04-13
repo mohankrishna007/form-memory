@@ -1,9 +1,12 @@
 {
   "name": "form-memory",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "main": "content.js",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "node scripts/build.mjs --clean",
+    "package": "npm run build && powershell -NoProfile -Command \"if (!(Test-Path release)) { New-Item -ItemType Directory -Path release | Out-Null }; Compress-Archive -Path dist/* -DestinationPath release/form-memory-assistant-v1.1.0.zip -Force\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
