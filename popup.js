@@ -1,0 +1,50 @@
+(() => {
+  const STORAGE_KEY = "formMemoryAssistantData";
+  const statsEl = document.getElementById("stats");
+  const statusEl = document.getElementById("status");
+  const clearBtn = document.getElementById("clearAllBtn");
+
+  function storageGet() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        resolve(result[STORAGE_KEY] || {});
+      });
+    });
+  }
+
+  function storageRemove() {
+    return new Promise((resolve) => {
+      chrome.storage.local.remove(STORAGE_KEY, resolve);
+    });
+  }
+
+  function setStatus(message) {
+    statusEl.textContent = message;
+  }
+
+  async function refreshStats() {
+    const data = await storageGet();
+    const fieldCount = Object.keys(data).length;
+    const valueCount = Object.values(data).reduce((sum, entry) => {
+      if (!entry || !Array.isArray(entry.values)) {
+        return sum;
+      }
+      return sum + entry.values.length;
+    }, 0);
+
+    statsEl.textContent = `Saved fields: ${fieldCount} | Saved values: ${valueCount}`;
+  }
+
+  clearBtn.addEventListener("click", async () => {
+    const confirmed = window.confirm("Delete all saved form memory values?");
+    if (!confirmed) {
+      return;
+    }
+
+    await storageRemove();
+    setStatus("All saved values were cleared.");
+    await refreshStats();
+  });
+
+  refreshStats();
+})();

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Form Memory Assistant</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --primary: #0ea5e9;
+        --primary-hover: #0284c7;
+        --danger: #dc2626;
+        --border: #e2e8f0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 300px;
+        padding: 16px;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(140deg, #f8fafc, #eff6ff);
+        color: var(--text);
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      }
+
+      h1 {
+        font-size: 16px;
+        margin: 0 0 8px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .stats {
+        margin: 12px 0 14px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #f8fafc;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      button {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .clear {
+        background: var(--danger);
+        color: #ffffff;
+      }
+
+      .clear:hover {
+        background: #b91c1c;
+      }
+
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--primary-hover);
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Form Memory Assistant</h1>
+      <p>Stores common form values and suggests them on similar fields.</p>
+
+      <div class="stats" id="stats">Loading...</div>
+
+      <button class="clear" id="clearAllBtn">Clear All Saved Values</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
